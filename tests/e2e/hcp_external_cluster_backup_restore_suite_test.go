@@ -32,21 +32,27 @@ var _ = ginkgo.Describe("HCP external cluster Backup and Restore tests", ginkgo.
 	}
 
 	var _ = ginkgo.BeforeAll(func() {
-		if hcBackupRestoreMode != string(HCModeExternal) {
+		if HCBackupRestoreMode(hcBackupRestoreMode) != HCModeExternal &&
+			HCBackupRestoreMode(hcBackupRestoreMode) != HCModeExternalROSA {
 			ginkgo.Skip("Skipping HCP full backup and restore test for non-existent HCP")
 		}
 
 		h = &libhcp.HCHandler{
-			Ctx:            context.Background(),
-			Client:         runTimeClientForSuiteRun,
-			HCOCPTestImage: libhcp.HCOCPTestImage,
+			Ctx:                  context.Background(),
+			Client:               runTimeClientForSuiteRun,
+			ClientServiceCluster: crClientForServiceCluster,
+			HCOCPTestImage:       libhcp.HCOCPTestImage,
 		}
 	})
 
 	// After Each
 	var _ = ginkgo.AfterEach(func(ctx ginkgo.SpecContext) {
 		gatherLogs(lastBRCase.BackupRestoreCase, lastInstallTime, ctx.SpecReport())
-		tearDownDPAResources(lastBRCase.BackupRestoreCase)
+		oadpDeploymentOperation := NewOADPDeploymentOperationDefault()
+		if HCBackupRestoreMode(hcBackupRestoreMode) == HCModeExternalROSA {
+			oadpDeploymentOperation = NewOADPDeploymentOperationROSA()
+		}
+		oadpDeploymentOperation.Undeploy(lastBRCase.BackupRestoreCase.BackupRestoreType)
 	})
 
 	ginkgo.It("HCP external cluster backup and restore test", ginkgo.Label("hcp_external"), func() {
@@ -55,14 +61,14 @@ var _ = ginkgo.Describe("HCP external cluster Backup and Restore tests", ginkgo.
 		}
 
 		runHCPBackupAndRestore(HCPBackupRestoreCase{
-			Mode:                   HCModeExternal,
+			Mode:                   HCBackupRestoreMode(hcBackupRestoreMode),
 			PreBackupVerifyGuest:   preBackupVerifyGuest(),
 			PostRestoreVerifyGuest: postBackupVerifyGuest(),
 			BackupRestoreCase: BackupRestoreCase{
 				Name:              hcName,
 				BackupRestoreType: lib.CSIDataMover,
-				PreBackupVerify:   libhcp.ValidateHCP(libhcp.ValidateHCPTimeout, libhcp.Wait10Min, []string{}, libhcp.GetHCPNamespace(hcName, libhcp.ClustersNamespace)),
-				PostRestoreVerify: libhcp.ValidateHCP(libhcp.ValidateHCPTimeout, libhcp.Wait10Min, []string{}, libhcp.GetHCPNamespace(hcName, libhcp.ClustersNamespace)),
+				PreBackupVerify:   libhcp.ValidateHCP(libhcp.ValidateHCPTimeout, libhcp.Wait10Min, []string{}, libhcp.GetHCPNamespace(hcName, hcNamespace)),
+				PostRestoreVerify: libhcp.ValidateHCP(libhcp.ValidateHCPTimeout, libhcp.Wait10Min, []string{}, libhcp.GetHCPNamespace(hcName, hcNamespace)),
 				BackupTimeout:     libhcp.HCPBackupTimeout,
 			},
 		}, updateLastBRcase, updateLastInstallTime, h)

@@ -96,10 +96,6 @@ var (
 		"openshift-route-controller-manager",
 	}
 
-	HCPIncludedNamespaces = []string{
-		ClustersNamespace,
-	}
-
 	HCPIncludedResources = []string{
 		"sa",
 		"role",
@@ -143,11 +139,12 @@ var (
 
 // HCHandler handles operations related to HostedClusters
 type HCHandler struct {
-	Ctx            context.Context
-	Client         client.Client
-	HCOCPTestImage string
-	HCPNamespace   string
-	HostedCluster  *hypershiftv1.HostedCluster
+	Ctx                  context.Context
+	Client               client.Client
+	ClientServiceCluster client.Client
+	HCOCPTestImage       string
+	HCPNamespace         string
+	HostedCluster        *hypershiftv1.HostedCluster
 }
 
 type RequiredOperator struct {
