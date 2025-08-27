@@ -64,9 +64,13 @@ TTL_DURATION ?= 1h
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.32 # Kubernetes version from OpenShift 4.19.x https://openshift-release.apps.ci.l2s4.p1.openshiftapps.com/#4-stable
 
-# HC_NAME is the name of the HostedCluster to use for HCP tests when
-# hc_backup_restore_mode is set to external. Otherwise, HC_NAME is ignored.
+# HC_BACKUP_RESTORE_MODE is the mode of the HostedCluster to use for HCP tests.
+HC_BACKUP_RESTORE_MODE ?= external # create, external, external-rosa
+# HC_NAME is the name of the HostedCluster to use for HCP tests when HC_BACKUP_RESTORE_MODE is
+# set to external. Otherwise, HC_NAME is ignored.
 HC_NAME ?= ""
+# HC_NAMESPACE is the namespace for HostedClusters to use for HCP tests.
+HC_NAMESPACE ?= clusters
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -671,6 +675,7 @@ CI_CRED_FILE ?= ${CLUSTER_PROFILE_DIR}/.awscred
 BSL_REGION ?= us-east-1
 VSL_REGION ?= ${LEASED_RESOURCE}
 BSL_AWS_PROFILE ?= default
+VSL_AWS_PROFILE ?= default
 # BSL_AWS_PROFILE ?= migration-engineering
 
 # bucket file
@@ -724,6 +729,7 @@ test-e2e-setup: login-required build-must-gather
 	OADP_CRED_FILE="$(OADP_CRED_FILE)" \
 	BUCKET="$(OADP_BUCKET)" \
 	TARGET_CI_CRED_FILE="$(CI_CRED_FILE)" \
+	VSL_AWS_PROFILE="$(VSL_AWS_PROFILE)" \
 	VSL_REGION="$(VSL_REGION)" \
 	BSL_REGION="$(BSL_REGION)" \
 	BSL_AWS_PROFILE="$(BSL_AWS_PROFILE)" \
@@ -760,7 +766,7 @@ else
 endif
 ifeq ($(TEST_HCP_EXTERNAL),true)
 	TEST_FILTER += && (hcp_external)
-	HCP_EXTERNAL_ARGS = -hc_backup_restore_mode=external -hc_name=$(HC_NAME)
+	HCP_EXTERNAL_ARGS = -hc_backup_restore_mode=$(HC_BACKUP_RESTORE_MODE) -hc_name=$(HC_NAME) -hc_namespace=$(HC_NAMESPACE) -sc_kubeconfig=$(SC_KUBECONFIG)
 else
 	TEST_FILTER += && (! hcp_external)
 endif
