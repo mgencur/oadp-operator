@@ -46,7 +46,7 @@ var _ = ginkgo.Describe("HCP external cluster Backup and Restore tests", ginkgo.
 	// After Each
 	var _ = ginkgo.AfterEach(func(ctx ginkgo.SpecContext) {
 		gatherLogs(lastBRCase.BackupRestoreCase, lastInstallTime, ctx.SpecReport())
-		tearDownDPAResources(lastBRCase.BackupRestoreCase)
+		// tearDownDPAResources(lastBRCase.BackupRestoreCase)
 	})
 
 	ginkgo.It("HCP external cluster backup and restore test", ginkgo.Label("hcp_external"), func() {

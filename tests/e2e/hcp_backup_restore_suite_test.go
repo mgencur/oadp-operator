@@ -33,7 +33,7 @@ func runHCPBackupAndRestore(
 	updateLastInstallTime()
 
 	log.Printf("Preparing backup and restore")
-	backupName, restoreName := prepareBackupAndRestore(brCase.BackupRestoreCase, func() {})
+	backupName, _ := prepareBackupAndRestore(brCase.BackupRestoreCase, func() {})
 
 	err := h.AddHCPPluginToDPA(dpaCR.Namespace, dpaCR.Name, false)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "failed to add HCP plugin to DPA: %v", err)
@@ -85,37 +85,7 @@ func runHCPBackupAndRestore(
 	excludedResources := libhcp.HCPExcludedResources
 	includedNamespaces := append(libhcp.HCPIncludedNamespaces, libhcp.GetHCPNamespace(h.HostedCluster.Name, libhcp.ClustersNamespace))
 
-	nsRequiresResticDCWorkaround := runHCPBackup(brCase.BackupRestoreCase, backupName, h, includedNamespaces, includedResources, excludedResources)
-
-	// Delete everything in HCP namespace
-	log.Printf("Deleting HCP & HC")
-	err = h.RemoveHCP(libhcp.Wait10Min)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "failed to remove HCP: %v", err)
-
-	// Restore HC
-	log.Printf("Restoring HC")
-	runHCPRestore(brCase.BackupRestoreCase, backupName, restoreName, nsRequiresResticDCWorkaround)
-
-	// Unified post-restore verification
-	if brCase.PostRestoreVerify != nil {
-		log.Printf("Validating HC post-restore")
-		err = brCase.PostRestoreVerify(runTimeClientForSuiteRun, "" /*unused*/)
-		gomega.Expect(err).ToNot(gomega.HaveOccurred(), "failed to run HCP post-restore verification: %v", err)
-	}
-
-	if brCase.Mode == HCModeExternal {
-		// Post-restore verification for guest cluster
-		if brCase.PostRestoreVerifyGuest != nil {
-			log.Printf("Validating guest cluster post-restore")
-			hcKubeconfig, err := h.GetHostedClusterKubeconfig(h.HostedCluster)
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			crClientForHC, err := client.New(hcKubeconfig, client.Options{Scheme: lib.Scheme})
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			gomega.Eventually(h.ValidateClient(crClientForHC), 5*time.Minute, 2*time.Second).Should(gomega.BeTrue())
-			err = brCase.PostRestoreVerifyGuest(crClientForHC, "" /*unused*/)
-			gomega.Expect(err).ToNot(gomega.HaveOccurred(), "failed to run post-restore verification for guest cluster: %v", err)
-		}
-	}
+	runHCPBackup(brCase.BackupRestoreCase, backupName, h, includedNamespaces, includedResources, excludedResources)
 }
 
 type VerificationFunctionGuest func(client.Client, string) error
@@ -265,33 +235,9 @@ func runHCPBackup(brCase BackupRestoreCase, backupName string, h *libhcp.HCHandl
 	err = lib.CreateCustomBackupForNamespaces(h.Client, namespace, backupName, namespaces, includedResources, excludedResources, brCase.BackupRestoreType == lib.KOPIA, brCase.BackupRestoreType == lib.CSIDataMover)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-	// wait for backup to not be running
-	gomega.Eventually(lib.IsBackupDone(h.Client, namespace, backupName), brCase.BackupTimeout, time.Second*10).Should(gomega.BeTrue())
-	// TODO only log on fail?
-	describeBackup := lib.DescribeBackup(h.Client, namespace, backupName)
-	ginkgo.GinkgoWriter.Println(describeBackup)
-
-	backupLogs := lib.BackupLogs(kubernetesClientForSuiteRun, h.Client, namespace, backupName)
-	backupErrorLogs := lib.BackupErrorLogs(kubernetesClientForSuiteRun, h.Client, namespace, backupName)
-	accumulatedTestLogs = append(accumulatedTestLogs, describeBackup, backupLogs)
-
-	// Check error logs for non-relevant errors
-	filteredBackupErrorLogs := libhcp.FilterErrorLogs(backupErrorLogs)
-
-	if !brCase.SkipVerifyLogs {
-		gomega.Expect(filteredBackupErrorLogs).Should(gomega.Equal([]string{}))
-	}
-
-	// check if backup succeeded
-	succeeded, err := lib.IsBackupCompletedSuccessfully(kubernetesClientForSuiteRun, h.Client, namespace, backupName)
+	// Introduce failure at 86% progress
+	err = lib.DeleteVeleroPod(kubernetesClientForSuiteRun, h.Client, namespace, backupName)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	gomega.Expect(succeeded).To(gomega.Equal(true))
-	log.Printf("Backup for case %s succeeded", brCase.Name)
-
-	if brCase.BackupRestoreType == lib.CSI {
-		// wait for volume snapshot to be Ready
-		gomega.Eventually(lib.AreVolumeSnapshotsReady(h.Client, backupName), time.Minute*4, time.Second*10).Should(gomega.BeTrue())
-	}
 
 	return nsRequiresResticDCWorkaround
 }

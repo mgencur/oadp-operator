@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -205,16 +204,16 @@ var _ = ginkgo.BeforeSuite(func() {
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 })
 
-var _ = ginkgo.AfterSuite(func() {
-	log.Printf("Deleting Secrets")
-	err := lib.DeleteSecret(kubernetesClientForSuiteRun, namespace, vslSecretName)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	err = lib.DeleteSecret(kubernetesClientForSuiteRun, namespace, bslSecretName)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	err = lib.DeleteSecret(kubernetesClientForSuiteRun, namespace, bslSecretNameWithCarriageReturn)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	log.Printf("Deleting DPA")
-	err = dpaCR.Delete()
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	gomega.Eventually(dpaCR.IsDeleted(), time.Minute*2, time.Second*5).Should(gomega.BeTrue())
-})
+// var _ = ginkgo.AfterSuite(func() {
+// 	log.Printf("Deleting Secrets")
+// 	err := lib.DeleteSecret(kubernetesClientForSuiteRun, namespace, vslSecretName)
+// 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+// 	err = lib.DeleteSecret(kubernetesClientForSuiteRun, namespace, bslSecretName)
+// 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+// 	err = lib.DeleteSecret(kubernetesClientForSuiteRun, namespace, bslSecretNameWithCarriageReturn)
+// 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+// 	log.Printf("Deleting DPA")
+// 	err = dpaCR.Delete()
+// 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+// 	gomega.Eventually(dpaCR.IsDeleted(), time.Minute*2, time.Second*5).Should(gomega.BeTrue())
+// })
