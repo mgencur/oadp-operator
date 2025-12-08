@@ -298,6 +298,26 @@ func (h *HCHandler) WaitForHCPDeletion(hcp *hypershiftv1.HostedControlPlane) err
 	})
 }
 
+func (h *HCHandler) IsHCPaused(hcName, hcNamespace string) wait.ConditionFunc {
+	return func() (bool, error) {
+		hc, err := h.GetHostedCluster(hcName, hcNamespace)
+		if err != nil {
+			return false, err
+		}
+		return hc.Spec.PausedUntil != nil && *hc.Spec.PausedUntil == "true", nil
+	}
+}
+
+func (h *HCHandler) IsHCUnPaused(hcName, hcNamespace string) wait.ConditionFunc {
+	return func() (bool, error) {
+		hc, err := h.GetHostedCluster(hcName, hcNamespace)
+		if err != nil {
+			return false, err
+		}
+		return hc.Spec.PausedUntil == nil || *hc.Spec.PausedUntil == "", nil
+	}
+}
+
 // GetHostedCluster returns the HostedCluster object
 func (h *HCHandler) GetHostedCluster(hcName, hcNamespace string) (*hypershiftv1.HostedCluster, error) {
 	hc := &hypershiftv1.HostedCluster{}

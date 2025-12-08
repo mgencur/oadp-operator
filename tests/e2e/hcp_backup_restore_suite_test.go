@@ -235,9 +235,11 @@ func runHCPBackup(brCase BackupRestoreCase, backupName string, h *libhcp.HCHandl
 	err = lib.CreateCustomBackupForNamespaces(h.Client, namespace, backupName, namespaces, includedResources, excludedResources, brCase.BackupRestoreType == lib.KOPIA, brCase.BackupRestoreType == lib.CSIDataMover)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
+	gomega.Eventually(h.IsHCPaused(brCase.Name, libhcp.ClustersNamespace), libhcp.Wait10Min, time.Second).Should(gomega.BeTrue())
 	// Introduce failure at 86% progress
 	err = lib.DeleteVeleroPod(kubernetesClientForSuiteRun, h.Client, namespace, backupName)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	gomega.Eventually(h.IsHCUnPaused(brCase.Name, libhcp.ClustersNamespace), libhcp.Wait10Min, time.Second).Should(gomega.BeTrue())
 
 	return nsRequiresResticDCWorkaround
 }
