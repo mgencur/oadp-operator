@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/oadp-operator/pkg/common"
 )
@@ -210,4 +211,79 @@ func RunDcPostRestoreScript(dcRestoreName string) error {
 	log.Printf("stderr:\n%s", stderrOutput.String())
 	log.Printf("err: %v", err)
 	return err
+}
+
+// DeleteVeleroPod monitors backup progress and deletes the Velero pod when progress exceeds 85%.
+// It uses PollUntilContextCancel to continuously check the backup progress until the threshold is met.
+func DeleteVeleroPod(c *kubernetes.Clientset, ocClient client.Client, veleroNamespace string, backupName string) error {
+	log.Printf("Starting to monitor backup %s progress for Velero pod deletion", backupName)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	var progressPercent float64
+	err := wait.PollUntilContextCancel(ctx, 100*time.Millisecond, true, func(ctx context.Context) (bool, error) {
+		// Get the backup to check progress
+		backup, err := GetBackup(ocClient, veleroNamespace, backupName)
+		if err != nil {
+			log.Printf("Error getting backup %s: %v", backupName, err)
+			return false, err
+		}
+
+		// Check if we have progress data
+		if backup.Status.Progress == nil {
+			log.Printf("Backup progress is nil, waiting...")
+			return false, nil
+		}
+
+		totalItems := backup.Status.Progress.TotalItems
+		itemsBackedUp := backup.Status.Progress.ItemsBackedUp
+
+		// Avoid division by zero
+		if totalItems == 0 {
+			log.Printf("Total items is 0, waiting for backup to start...")
+			return false, nil
+		}
+
+		// Calculate progress percentage
+
+		newProgressPercent := float64(itemsBackedUp) / float64(totalItems) * 100
+		if progressPercent != newProgressPercent {
+			progressPercent = newProgressPercent
+			log.Printf("Backup progress: %.2f%% (%d/%d items)", newProgressPercent, itemsBackedUp, totalItems)
+		}
+
+		// Check if progress exceeds 85%
+		if progressPercent > 86.0 {
+			log.Printf("Progress %.2f%% exceeds 85%%, deleting Velero pod", progressPercent)
+
+			// Get the Velero pod
+			pod, err := GetVeleroPod(c, veleroNamespace)
+			if err != nil {
+				log.Printf("Error getting Velero pod: %v", err)
+				return false, err
+			}
+
+			// Delete the pod
+			deletePolicy := metav1.DeletePropagationForeground
+			err = c.CoreV1().Pods(veleroNamespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{
+				PropagationPolicy: &deletePolicy,
+			})
+			if err != nil {
+				log.Printf("Error deleting Velero pod %s: %v", pod.Name, err)
+				return false, err
+			}
+
+			log.Printf("Successfully deleted Velero pod %s", pod.Name)
+			return true, nil
+		}
+
+		// Progress not yet at 85%, continue polling
+		return false, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("error while monitoring backup progress: %w", err)
+	}
+
+	return nil
 }
